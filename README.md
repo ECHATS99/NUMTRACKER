@@ -29,21 +29,23 @@ automatiquement les recherches Web pertinentes.
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/<TON-GITHUB>/blackhawks-osint
-cd blackhawks-osint
-chmod +x api.sh
+git clone https://github.com/ECHATS99/NUMTRACKER.git
+cd NUMTRACKER
+chmod +x NUMTRACKER
 ```
 
 Sur Termux :
 ```bash
 pkg install curl jq
 ```
-
+sur kali
+```bash
+apt install curl jq
 ---
 
 ## 🚀 Utilisation
 ```bash
-bash api.sh
+bash NUMTRACKER.sh
 ```
 
 ---
