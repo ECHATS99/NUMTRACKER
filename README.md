@@ -1,4 +1,4 @@
-# BLACK HAWKS OSINT
+# NUMTRACKER 
 
 Script OSINT léger et rapide pour Termux / Linux, créé par **Elioth Mikabou & Hawks**.  
 Permet l'analyse rapide d'emails, de numéros, d'IMEI et de noms/prénoms, en ouvrant
@@ -41,7 +41,7 @@ pkg install curl jq
 sur kali
 ```bash
 apt install curl jq
----
+```
 
 ## 🚀 Utilisation
 ```bash
