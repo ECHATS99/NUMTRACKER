@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NUM TRACER E-CHATS — Hybrid</title>
+
+<!-- UAParser -->
+<script src="https://cdn.jsdelivr.net/npm/ua-parser-js@1.0.2/dist/ua-parser.min.js"></script>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+:root{
+  --bg:#000; --neon:#03ff7a; --panel:#07120d; --accent:#00ff6a;
+}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--neon);
+  font-family:monospace;
+}
+.layout{
+  display:flex;
+  height:100vh;
+  overflow:hidden;
+}
+.left{
+  flex:2;
+  border-right:1px solid rgba(0,255,120,0.12);
+  position:relative;
+}
+.right{
+  flex:1;
+  padding:14px;
+  background:var(--panel);
+  overflow:auto;
+}
+.header{
+  padding:8px 12px;
+  font-weight:700;
+  color:var(--accent);
+  font-size:18px;
+}
+.controls input{
+  width:100%;
+  padding:10px;
+  border-radius:6px;
+  border:1px solid rgba(0,255,120,0.12);
+  background:#000;
+  color:var(--neon);
+}
+.controls button{
+  width:100%;
+  margin-top:8px;
+  padding:10px;
+  border-radius:8px;
+  border:none;
+  background:linear-gradient(90deg,var(--neon),#66ffd1);
+  color:#001;
+  font-weight:700;
+  cursor:pointer;
+}
+.terminal{
+  margin-top:10px;
+  background:#000;
+  padding:8px;
+  border-radius:8px;
+  height:120px;
+  overflow:auto;
+  border:1px solid rgba(0,255,120,0.12);
+  font-size:12px;
+}
+.table{
+  margin-top:10px;
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+}
+.table th,.table td{
+  border:1px solid rgba(0,255,120,0.08);
+  padding:4px;
+  white-space:nowrap;
+}
+.table th{
+  background:rgba(0,255,120,0.06);
+}
+.map{
+  width:100%;
+  height:100%;
+}
+#miniHUD{
+  position:absolute;
+  top:12px;
+  left:12px;
+  z-index:999;
+  width:260px;
+  background:rgba(0,0,0,0.6);
+  border:1px solid var(--accent);
+  padding:8px;
+  border-radius:8px;
+  font-size:12px;
+}
+.note{
+  font-size:12px;
+  color:rgba(102,255,208,0.9);
+  margin-top:6px;
+}
+.row{
+  display:flex;
+  gap:8px;
+}
+.col{
+  flex:1;
+}
+.small{
+  font-size:12px;
+}
+@media(max-width:900px){
+  .layout{flex-direction:column}
+  .left{height:40vh}
+  .right{height:60vh}
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <div class="left">
+    <div id="miniHUD"></div>
+    <div id="map" class="map"></div>
+  </div>
+
+  <div class="right">
+    <div class="header">NUM TRACER E-CHATS — Hybrid</div>
+
+    <div class="controls">
+      <label>Adresse IP :</label>
+      <input id="ipInput" placeholder="ex: 41.75.65.210">
+      <button id="scanIpBtn">SCAN IP</button>
+
+      <hr style="border:0;border-top:1px solid rgba(0,255,120,0.06);margin:8px 0"/>
+
+      <label>Numéro (+international) :</label>
+      <input id="numInput" placeholder="+242 06 1234 567">
+      <button id="scanNumBtn">SCAN NUMÉRO</button>
+
+      <hr style="border:0;border-top:1px solid rgba(0,255,120,0.06);margin:8px 0"/>
+
+      <label>IMEI :</label>
+      <input id="imeiInput" placeholder="ex: 356938035643809">
+      <button id="scanImeiBtn">SCAN IMEI</button>
+
+      <button id="clearBtn" style="background:#111;color:var(--neon);border:1px solid var(--accent);margin-top:8px">EFFACER LOGS</button>
+    </div>
+
+    <div class="section-title" style="margin-top:12px;color:var(--accent);font-weight:700">Résultats / Console</div>
+    <div id="terminal" class="terminal">
+      <div>> SYSTEM READY</div>
+      <div>> NUM TRACER HYBRID LOADED</div>
+    </div>
+
+    <div style="margin-top:8px;font-weight:700;color:var(--accent)">Historique</div>
+    <table class="table" id="logsTable">
+      <thead>
+        <tr><th>Date</th><th>Type</th><th>Target</th><th>Country</th><th>City</th><th>Extra</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div style="margin-top:8px" class="row">
+      <div class="col"><button id="exportBtn" style="background:#222;color:var(--neon);border:1px solid var(--accent)">EXPORT CSV</button></div>
+      <div class="col"><button id="toggleLayer" style="background:#222;color:var(--neon);border:1px solid var(--accent)">SATELLITE</button></div>
+    </div>
+
+    <div class="note">Backend: remplace l'URL API_BASE si nécessaire (localhost:8000). API KEYS: (remplace api keys)</div>
+  </div>
+</div>
+
+<script>
+// --- Configuration API
+const API_BASE = (location.hostname === "localhost" || location.hostname === "127.0.0.1") 
+  ? "http://localhost:8000" 
+  : "https://TON_BACKEND_DNS_OR_IP";
+const API_KEYS = {
+  numverify: "(fb2cf36f9b78ae7d085656ff6b70801c)",
+  imei: "(6c8a2b0e-65c8-4023-83c6-c74d85c19924)",
+  ipinfo: "(42c4f6efe1cb3f)"
+};
+
+// --- Logs
+let logs = [];
+const terminal = document.getElementById('terminal');
+const logsTableBody = document.querySelector('#logsTable tbody');
+const miniHUD = document.getElementById('miniHUD');
+
+// --- Map
+const normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19});
+const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
+const map = L.map('map',{layers:[normal]}).setView([0,0],2);
+L.control.layers({"Normal":normal,"Satellite":sat}).addTo(map);
+let currentMarker = null;
+
+// --- Utils
+function tlog(txt){ 
+  const d=document.createElement('div'); 
+  d.textContent=txt; 
+  terminal.appendChild(d); 
+  terminal.scrollTop=terminal.scrollHeight; 
+}
+
+function updateMiniHUD(){ 
+  miniHUD.innerHTML=''; 
+  const last = logs.slice(-5).reverse(); 
+  if(!last.length){ 
+    miniHUD.innerHTML='<div style="color:var(--neon)">Aucun résultat</div>'; 
+    return; 
+  } 
+  last.forEach(l=>{
+    const row = document.createElement('div'); 
+    row.innerHTML = `<b>${l.target}</b><br/><span style="font-size:12px">${l.type} • ${l.country||'-'}</span><br/><span style="font-size:11px">${l.lat||'-'}, ${l.lon||'-'}</span><hr style="border:0;border-top:1px solid rgba(0,255,120,0.06)"/>`; 
+    miniHUD.appendChild(row); 
+  }); 
+}
+
+function addLog(row){ 
+  logs.push(row); 
+  const tr=document.createElement('tr'); 
+  tr.innerHTML = `<td>${row.date}</td><td>${row.type}</td><td>${row.target}</td><td>${row.country||'-'}</td><td>${row.city||'-'}</td><td>${row.extra||'-'}</td>`; 
+  tr.onclick = ()=>{ 
+    if(row.lat && row.lon){ 
+      map.setView([row.lat,row.lon], 12); 
+      if(currentMarker) map.removeLayer(currentMarker); 
+      currentMarker = L.marker([row.lat,row.lon]).addTo(map).bindPopup(`<b>${row.target}</b><br/>${row.country||''}`).openPopup(); 
+    } 
+  }; 
+  logsTableBody.appendChild(tr); 
+  updateMiniHUD(); 
+}
+
+// --- IP scan
+document.getElementById('scanIpBtn').onclick = async ()=>{
+  const ip = document.getElementById('ipInput').value.trim(); 
+  if(!ip){ tlog("> Entrez une IP"); return; }
+  tlog(`> Scanning IP ${ip} ...`);
+  try{
+    const res = await fetch(`${API_BASE}/api/scan_ip`, {
+      method:'POST', 
+      headers:{'Content-Type':'application/json'}, 
+      body: JSON.stringify({ip, api_key:API_KEYS.ipinfo})
+    });
+    const j = await res.json();
+    tlog("> IP result: " + JSON.stringify(j.country || j.city || j));
+    const loc = (j.loc && typeof j.loc === 'string') ? j.loc.split(',') : [j.lat || 0, j.lon || 0];
+    const lat = parseFloat(loc[0]); 
+    const lon = parseFloat(loc[1]);
+    addLog({ date: new Date().toLocaleString(), type: "IP", target: ip, country: j.country || '-', city: j.city || '-', lat, lon, extra: j.org || '-' });
+  }catch(e){ tlog("> Erreur IP: " + e.message); }
+};
+
+// --- Number scan
+document.getElementById('scanNumBtn').onclick = async ()=>{
+  const number = document.getElementById('numInput').value.trim(); 
+  if(!number){ tlog("> Entrez un numéro"); return; }
+  tlog(`> Scanning number ${number} ...`);
+  try{
+    const res = await fetch(`${API_BASE}/api/scan_number`, {
+      method:'POST', 
+      headers:{'Content-Type':'application/json'}, 
+      body: JSON.stringify({number, api_key:API_KEYS.numverify})
+    });
+    const j = await res.json();
+    tlog("> Number result: " + JSON.stringify(j.normalized || j));
+    const norm = j.normalized || {};
+    let lat=null, lon=null;
+    if(norm.country_name){
+      const cents = {"Republic of the Congo":[-4.27,15.27],"France":[46.5,2.2],"Nigeria":[9.08,8.67]};
+      const key = norm.country_name;
+      if(cents[key]){ lat = cents[key][0]; lon = cents[key][1]; }
+    }
+    addLog({ date: new Date().toLocaleString(), type: "NUM", target: norm.e164 || number, country: norm.country_name, city: '-', lat, lon, extra: norm.carrier || ('valid:' + norm.valid) });
+  }catch(e){ tlog("> Erreur num: " + e.message); }
+};
+
+// --- IMEI scan
+document.getElementById('scanImeiBtn').onclick = async ()=>{
+  const imei = document.getElementById('imeiInput').value.trim(); 
+  if(!imei){ tlog("> Entrez un IMEI"); return; }
+  tlog(`> Scanning IMEI ${imei} ...`);
+  try{
+    const res = await fetch(`${API_BASE}/api/scan_imei`, {
+      method:'POST', 
+      headers:{'Content-Type':'application/json'}, 
+      body: JSON.stringify({imei, api_key:API_KEYS.imei})
+    });
+    const j = await res.json();
+    tlog("> IMEI result: " + (j.raw ? JSON.stringify(j.raw) : JSON.stringify(j)));
+    const model = (j.raw?.data?.model) || (j.raw?.model) || '-';
+    addLog({ date: new Date().toLocaleString(), type: "IMEI", target: imei, country: '-', city: '-', lat: null, lon: null, extra: model });
+  }catch(e){ tlog("> Erreur imei: " + e.message); }
+};
+
+// --- Export CSV
+document.getElementById('exportBtn').onclick = ()=>{
+  if(logs.length === 0){ tlog("> Aucun log à exporter"); return; }
+  let csv = "Date,Type,Target,Country,City,Lat,Lon,Extra\n";
+  logs.forEach(l=>{ csv += `"${l.date}","${l.type}","${l.target}","${l.country||''}","${l.city||''}","${l.lat||''}","${l.lon||''}","${l.extra||''}"\n`; });
+  const blob = new Blob([csv], {type:'text/csv'}); 
+  const url = URL.createObjectURL(blob); 
+  const a=document.createElement('a'); 
+  a.href=url; 
+  a.download='tracer_logs.csv'; 
+  a.click(); 
+  URL.revokeObjectURL(url); 
+  tlog("> Export CSV terminé");
+};
+
+// --- toggle satellite
+let satOn = false;
+document.getElementById('toggleLayer').onclick = ()=>{
+  satOn = !satOn;
+  if(satOn){ map.addLayer(sat); } else { map.removeLayer(sat); }
+};
+
+// --- clear logs
+document.getElementById('clearBtn').onclick = ()=>{
+  terminal.innerHTML = ""; 
+  logsTableBody.innerHTML = ""; 
+  logs = []; 
+  miniHUD.innerHTML = ""; 
+  tlog("> SYSTEM READY"); 
+  tlog("> HYBRID LOADED"); 
+  updateMiniHUD();
+};
+
+// --- init
+tlog("> SYSTEM READY");
+tlog("> HYBRID FRONTEND LOADED");
+updateMiniHUD();
+
+</script>
+</body>
+</html>
